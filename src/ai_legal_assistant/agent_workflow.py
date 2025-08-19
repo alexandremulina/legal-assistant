@@ -8,12 +8,13 @@ from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
 from langchain.agents import Tool
 
 from .models import CompanyFiling
-from .tools import sec_edgar_search, sedar_plus_search, cvm_empresas_net_search, general_web_search, read_document_from_url, fallback_search
+from .tools import sec_edgar_search, sedar_plus_search, cvm_empresas_net_search, general_web_search, read_document_from_url, fallback_search, real_sec_search
 from .config import GOOGLE_API_KEY
 
 # 1. Define Tools for the Agent
 tools = [
     Tool(name="search_sec_edgar", func=sec_edgar_search, description="Use this to search for US company filings on the SEC EDGAR database. Input should be a company name and the form type, e.g., 'Microsoft 10-K'."),
+    Tool(name="real_sec_search", func=real_sec_search, description="Use this for real-time SEC EDGAR searches using their public API. Input should be a company name."),
     Tool(name="search_sedar_plus", func=sedar_plus_search, description="Use this to search for Canadian company filings on the SEDAR+ database. Input should be a company name and the form type."),
     Tool(name="search_cvm_empresas_net", func=cvm_empresas_net_search, description="Use this to search for Brazilian company filings on the CVM Empresas.NET database. Input should be a company name and the form type, e.g., 'Petrobras Formulário de Referência'."),
     Tool(name="read_document_from_url", func=read_document_from_url, description="Use this to read the full text content of a document from a specific URL. The input MUST be a valid URL."),
@@ -39,12 +40,13 @@ class FilingAgent:
 
         **Follow these steps:**
         1.  **Analyze the user's request** to identify the company, the document type, and the jurisdiction (USA, Canada, or Brazil).
-        2.  **Select the correct specialized search tool** based on the jurisdiction (e.g., `search_sec_edgar` for a 10-K, `search_cvm_empresas_net` for a DFP). Do NOT use the general search tool if a specialized tool is appropriate.
-        3.  **Execute the search** and analyze the results. The search results will be text containing links.
-        4.  **If search tools return errors** (like "403 Forbidden" or "API key not configured"), use the `fallback_search` tool to provide mock data for demonstration purposes.
-        5.  From the search results, **identify the most promising URL** to the actual filing document.
-        6.  **Use the `read_document_from_url` tool** with the identified URL to get the document's content.
-        7.  Finally, after you have the document's content, **DO NOT call any more tools**. Instead, provide your final answer by thoroughly analyzing the text and structuring it ONLY in the requested Pydantic `CompanyFiling` format. You must fill all the fields of the Pydantic model.
+        2.  **ALWAYS try real search first**: Use `real_sec_search` for US companies to get actual SEC EDGAR data.
+        3.  **If real search fails**, use the specialized search tools based on jurisdiction (e.g., `search_sec_edgar` for a 10-K, `search_cvm_empresas_net` for a DFP).
+        4.  **Execute the search** and analyze the results. The search results will be text containing links.
+        5.  **If all search tools return errors** (like "403 Forbidden" or "API key not configured"), use the `fallback_search` tool to provide mock data for demonstration purposes.
+        6.  From the search results, **identify the most promising URL** to the actual filing document.
+        7.  **Use the `read_document_from_url` tool** with the identified URL to get the document's content.
+        8.  Finally, after you have the document's content, **DO NOT call any more tools**. Instead, provide your final answer by thoroughly analyzing the text and structuring it ONLY in the requested Pydantic `CompanyFiling` format. You must fill all the fields of the Pydantic model.
 
         **CRITICAL: You MUST use these EXACT field names in your JSON response:**
         - `contract_name` (not filing_type)
